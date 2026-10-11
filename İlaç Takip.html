@@ -620,7 +620,7 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
       draft.doses.length ? h('div', { class:'edit-head' }, h('span', null, 'Saat'), h('span', null, 'İsim')) : null);
     draft.doses.forEach(function(d, i){
       f.append(h('div', { class:'edit-row' },
-        h('input', { type:'time', value:d.time, 'aria-label':'Saat', oninput:function(e){ d.time = e.target.value; } }),
+        h('input', { type:'time', value:d.time, 'aria-label':'Saat', oninput:function(e){ d.time = String(e.target.value || '').slice(0, 5); }, onchange:function(e){ d.time = String(e.target.value || '').slice(0, 5); } }),
         h('input', { type:'text', value:d.name, placeholder:'antibiyotik mavi beyaz hap', 'aria-label':'İsim', oninput:function(e){ d.name = e.target.value; } }),
         h('button', { class:'btn ghost small', type:'button', onclick:function(){ draft.doses.splice(i,1); renderSettings(); } }, 'Sil')));
     });
@@ -639,9 +639,23 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
       h('button', { class:'btn', type:'button', onclick:saveConfig }, 'Değişiklikleri kaydet'),
       h('button', { class:'btn ghost', type:'button', onclick:function(){ draft = null; renderSettings(); } }, 'Vazgeç')));
   }
+  function readDraftFromForm(){
+    if (!draft) return;
+    var patient = $('f-patient'), grace = $('f-grace');
+    if (patient) draft.patient = patient.value;
+    if (grace && grace.value !== '') draft.graceMin = +grace.value;
+    var times = document.querySelectorAll('#form input[type=time]');
+    var names = document.querySelectorAll('#form input[aria-label="İsim"]');
+    times.forEach(function(el, i){
+      if (!draft.doses[i]) return;
+      draft.doses[i].time = String(el.value || '').slice(0, 5);
+      if (names[i]) draft.doses[i].name = names[i].value;
+    });
+  }
   async function saveConfig(){
     if (!draft) return;
     if (!db && !localMode) return;
+    readDraftFromForm();
     if (draft.doses.some(function(d){ return !/^\d{2}:\d{2}$/.test(d.time || ''); })) {
       toast('Her satıra bir saat gir.'); return;
     }
