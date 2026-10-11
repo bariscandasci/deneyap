@@ -349,14 +349,15 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
   function beep(){
     if (!audioCtx) return;
     try {
-      [0, .28, .56].forEach(function(off){
+      [0, .09, .18].forEach(function(off){
         var o = audioCtx.createOscillator(), g = audioCtx.createGain();
         o.type = 'square'; o.frequency.value = 880;
-        g.gain.setValueAtTime(0.0001, audioCtx.currentTime + off);
-        g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + off + .02);
-        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + off + .2);
+        var t0 = audioCtx.currentTime + off;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.9, t0 + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.07);
         o.connect(g); g.connect(audioCtx.destination);
-        o.start(audioCtx.currentTime + off); o.stop(audioCtx.currentTime + off + .22);
+        o.start(t0); o.stop(t0 + 0.08);
       });
     } catch(e){}
   }
@@ -704,7 +705,7 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
     } catch(e){}
     setInterval(function(){ $('clockT').textContent = hhmm(new Date()); }, 1000);
     setInterval(tick, 10000);
-    setInterval(loudBeep, 3500);
+    setInterval(loudBeep, 700);
     if (!db) {
       localMode = true;
       canWrite = true;
