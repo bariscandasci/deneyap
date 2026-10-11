@@ -133,6 +133,7 @@ th.today,td.today{background:var(--idle-bg)}
 .dose-label{font-weight:700}
 .cellbtn{appearance:none;border:0;background:transparent;padding:4px;border-radius:999px;cursor:pointer;line-height:0}
 .cellbtn:disabled{cursor:default}
+td.future .dot{opacity:.45}
 .help{color:var(--muted);margin:0 0 12px;font-size:16px;max-width:62ch}
 .edit-head{display:grid;grid-template-columns:130px 1fr auto;gap:8px;font-size:15px;color:var(--muted);margin:4px 0 6px}
 tr:last-child td{border-bottom:0}
@@ -215,8 +216,8 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
   </section>
 
   <section>
-    <h2>Son 7 gün</h2>
-    <p class="lead">Her satır bir saat ve isim, her sütun bir gün. Bir güne dokununca o ilaç alındı olarak işaretlenir.</p>
+    <h2>7 günlük çizelge</h2>
+    <p class="lead">İlk açtığınız günden başlar. Henüz gelmemiş günler boş kalır. Geçmiş bir güne dokununca alındı olarak işaretlenir.</p>
     <div class="scroll"><table id="hist"></table></div>
     <div class="legend">
       <span><i class="dot taken">✓</i> Alındı</span>
@@ -276,6 +277,7 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
       if (!raw || typeof raw !== 'object') return;
       config = normalize(raw.config);
       logs = (raw.logs && typeof raw.logs === 'object') ? raw.logs : {};
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw.startedOn || '')) startedOn = raw.startedOn;
     } catch(e){}
   }
   function saveLocal(){
@@ -286,14 +288,52 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
         var day = (logs[k] && logs[k].date) || String(k).slice(0, 10);
         if (day < min) delete logs[k];
       });
-      localStorage.setItem(LOCAL_KEY, JSON.stringify({ config:config, logs:logs }));
+      localStorage.setItem(LOCAL_KEY, JSON.stringify({ config:config, logs:logs, startedOn:startedOn }));
     } catch(e){ toast('Bu tarayıcı kayıtları saklayamadı.'); }
+  }
+  function ensureStarted(){
+    if (startedOn) return;
+    startedOn = dateKey(new Date());
+    saveLocal();
+  }
+  function parseDateKey(key){
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key || '');
+    if (!m) return null;
+    return new Date(+m[1], +m[2] - 1, +m[3]);
+  }
+  function chartDays(){
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var start = localMode ? parseDateKey(startedOn) : null;
+    var days = [], i;
+    if (!start) {
+      for (i = 6; i >= 0; i--) {
+        var back = new Date(today);
+        back.setDate(today.getDate() - i);
+        days.push(back);
+      }
+      return days;
+    }
+    for (i = 0; i < 7; i++) {
+      var ahead = new Date(start);
+      ahead.setDate(start.getDate() + i);
+      days.push(ahead);
+    }
+    if (dateKey(today) > dateKey(days[6])) {
+      days = [];
+      for (i = 6; i >= 0; i--) {
+        var recent = new Date(today);
+        recent.setDate(today.getDate() - i);
+        days.push(recent);
+      }
+    }
+    return days;
   }
 
   /* ---------- state ---------- */
   var db = null, userNs = null, myId = null;
   var canWrite = null, isAdmin = false;
   var localMode = false;
+  var startedOn = null;
   var LOCAL_KEY = 'ilacTakip.v1';
   var config = { patient:'', graceMin:30, doses:[], contacts:[] };
   var logs = {};
@@ -417,6 +457,7 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
   /* ---------- actions ---------- */
   async function markDay(dose, dayDate, taken){
     if (canWrite === false) return;
+    if (dateKey(dayDate) > dateKey(now)) return;
     var key = logKey(dateKey(dayDate), dose);
     var prev = logs[key];
     var entry = null;
@@ -537,7 +578,7 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
 
     if (localMode) {
       $('sub').textContent = doses.length
-        ? 'Son 7 gün çizelgesinde bir güne dokunarak alındı diye işaretle.'
+        ? 'Çizelge ilk açtığınız günden başlar. Geçmiş bir güne dokunarak alındı diye işaretle.'
         : 'Önce ilaç saatini ve ismini kaydet.';
     } else {
       $('sub').textContent = doses.length ? 'Kutudan gelen bilgiler burada görünür.' : 'Program girildiğinde kutu durumu burada görünür.';
@@ -549,13 +590,14 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
   function renderHistory(){
     var t = $('hist'); t.textContent = '';
     if (!config.doses.length) { t.append(h('tbody', null, h('tr', null, h('td', { class:'empty' }, 'Henüz ilaç saati yok. Yukarıdan saat ve isim ekle.')))); return; }
-    var days = [];
-    for (var i = 6; i >= 0; i--) { var d = new Date(now); d.setDate(d.getDate() - i); days.push(d); }
+    var days = chartDays();
+    var todayKey = dateKey(now);
     var head = h('tr', null, h('th', { class:'row' }, 'Saat ve isim'));
-    days.forEach(function(d, idx){
+    days.forEach(function(d){
+      var key = dateKey(d);
       var label = d.toLocaleDateString('tr-TR', { weekday:'short' }) + ' ' + d.getDate();
-      if (idx === 6) label += ' bugün';
-      head.append(h('th', { class: idx === 6 ? 'today' : false }, label));
+      if (key === todayKey) label += ' bugün';
+      head.append(h('th', { class: key === todayKey ? 'today' : false }, label));
     });
     t.append(h('thead', null, head));
     var body = h('tbody');
@@ -563,16 +605,18 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
       var tr = h('tr', null, h('td', { class:'row' },
         h('div', { class:'dose-time' }, dose.time),
         h('div', { class:'dose-label' }, dose.name || 'İsimsiz')));
-      days.forEach(function(d, idx){
+      days.forEach(function(d){
         var key = dateKey(d);
         var lg = logs[logKey(key, dose)];
+        var future = key > todayKey;
         var cls = '', glyph = '–', label = 'Bekliyor';
         if (lg) {
           cls = 'taken'; glyph = '✓';
           var ta = new Date(lg.takenAt);
           label = 'Alındı' + (isNaN(ta) ? '' : ' ' + hhmm(ta));
         }
-        else if (idx < 6) { cls = 'missed'; glyph = '!'; label = 'Alınmadı'; }
+        else if (future) { label = 'Henüz gelmedi'; }
+        else if (key < todayKey) { cls = 'missed'; glyph = '!'; label = 'Alınmadı'; }
         else {
           var s = doseState(dose);
           if (s === 'missed') { cls = 'missed'; glyph = '!'; label = 'Alınmadı'; }
@@ -580,12 +624,13 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
           else if (s === 'late') { cls = 'taken'; glyph = '✓'; label = 'Geç alındı'; }
         }
         var dayLabel = d.toLocaleDateString('tr-TR', { weekday:'long', day:'numeric', month:'long' });
-        tr.append(h('td', { class: idx === 6 ? 'today' : false },
+        var cellClass = key === todayKey ? 'today' : (future ? 'future' : false);
+        tr.append(h('td', { class: cellClass },
           h('button', {
             class:'cellbtn', type:'button', title:label,
-            disabled: canWrite === false,
+            disabled: canWrite === false || future,
             'aria-label': dose.time + ' ' + (dose.name || 'İlaç') + ', ' + dayLabel + ', ' + label,
-            onclick: function(){ markDay(dose, d, !lg); }
+            onclick: future ? null : function(){ markDay(dose, d, !lg); }
           }, h('i', { class:'dot ' + cls, 'aria-hidden':'true' }, glyph))));
       });
       body.append(tr);
@@ -712,6 +757,7 @@ input[type=text],input[type=tel],input[type=time],input[type=number]{
       isAdmin = true;
       myId = 'local';
       loadLocal();
+      ensureStarted();
       $('nodb').hidden = true;
       $('localnote').hidden = false;
       $('settingsSection').hidden = false;
