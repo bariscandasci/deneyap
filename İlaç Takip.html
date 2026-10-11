@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>İlaç Takip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDF3F1; --surface:#FFFFFF; --ink:#12262A; --muted:#566D72; --line:#CBD8D5;
+  --taken:#1B7A5C; --taken-bg:#DCF1E7;
+  --due:#D99500; --due-bg:#FFF1C9;
+  --missed:#C4372E; --missed-bg:#FBE1DE;
+  --idle:#9AAEB2; --idle-bg:#E3EBE9;
+  --btn:#12262A; --btn-ink:#FFFFFF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1A1D; --surface:#152428; --ink:#E8F1EF; --muted:#9BB2B2; --line:#27403F;
+    --taken:#4FD1A1; --taken-bg:#12372D;
+    --due:#FFC53D; --due-bg:#3A2E0A;
+    --missed:#FF7A70; --missed-bg:#3F1B18;
+    --idle:#5E7778; --idle-bg:#1D3033;
+    --btn:#E8F1EF; --btn-ink:#0D1A1D;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1A1D; --surface:#152428; --ink:#E8F1EF; --muted:#9BB2B2; --line:#27403F;
+  --taken:#4FD1A1; --taken-bg:#12372D;
+  --due:#FFC53D; --due-bg:#3A2E0A;
+  --missed:#FF7A70; --missed-bg:#3F1B18;
+  --idle:#5E7778; --idle-bg:#1D3033;
+  --btn:#E8F1EF; --btn-ink:#0D1A1D;
+}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;min-height:100%;background:var(--bg);color:var(--ink);
+  font-family:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  font-size:18px;line-height:1.5;
+}
+main{max-width:920px;margin:0 auto;padding:20px 18px 64px}
+h1,h2,h3{margin:0;line-height:1.15}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--due);outline-offset:2px}
+
+/* header */
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-top:8px}
+.top h1{font-size:clamp(28px,5vw,40px);font-weight:700;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:4px 0 0}
+.clock{text-align:right;font-variant-numeric:tabular-nums}
+.clock .t{font-size:clamp(34px,7vw,52px);font-weight:700;line-height:1}
+.clock .d{color:var(--muted);font-size:16px;margin-top:4px}
+
+.alarmbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  margin:20px 0 0;padding:12px 16px;border:1.5px dashed var(--line);border-radius:14px;color:var(--muted);font-size:16px
+}
+.alarmbar.on{border-style:solid;border-color:var(--taken);color:var(--taken);background:var(--taken-bg)}
+.note{margin:14px 0 0;padding:12px 16px;border-radius:12px;background:var(--idle-bg);font-size:16px}
+
+/* buttons */
+.btn{
+  appearance:none;border:0;border-radius:12px;padding:12px 18px;min-height:48px;cursor:pointer;
+  background:var(--btn);color:var(--btn-ink);font-weight:700
+}
+.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn.small{min-height:40px;padding:8px 14px;font-size:16px}
+.btn.link{background:none;color:var(--muted);text-decoration:underline;min-height:40px;padding:6px 4px;font-weight:400;font-size:16px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* status line */
+.headline{font-size:clamp(24px,4.4vw,34px);font-weight:700;margin:32px 0 16px;letter-spacing:-.01em}
+
+/* the box: compartments with LED strip */
+.box{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.slot{
+  position:relative;background:var(--surface);border-radius:20px;padding:34px 18px 18px;
+  border:1.5px solid var(--line);overflow:hidden;display:flex;flex-direction:column;gap:4px;min-height:200px
+}
+.slot::before{ /* LED strip */
+  content:"";position:absolute;left:0;right:0;top:0;height:14px;background:var(--idle);
+}
+.slot .led{
+  position:absolute;top:22px;right:16px;width:14px;height:14px;border-radius:50%;background:var(--idle);
+  border:2px solid var(--surface);box-shadow:0 0 0 1.5px var(--idle)
+}
+.slot .time{font-size:46px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.slot .name{font-size:20px;font-weight:700;margin-top:6px}
+.slot .med{color:var(--muted);font-size:16px}
+.slot .state{margin-top:auto;padding-top:14px;font-weight:700;font-size:17px}
+.slot .who{color:var(--muted);font-weight:400;font-size:15px;display:block}
+.slot .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.slot.taken::before,.slot.taken .led{background:var(--taken);box-shadow:0 0 0 1.5px var(--taken)}
+.slot.taken .state{color:var(--taken)}
+.slot.due{border-color:var(--due);background:var(--due-bg)}
+.slot.due::before,.slot.due .led{background:var(--due);box-shadow:0 0 0 1.5px var(--due)}
+.slot.due .state{color:var(--ink)}
+.slot.missed{border-color:var(--missed)}
+.slot.missed::before,.slot.missed .led{background:var(--missed);box-shadow:0 0 0 1.5px var(--missed)}
+.slot.missed .state{color:var(--missed)}
+.slot.upcoming{opacity:.92}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(217,149,0,.0)}50%{box-shadow:0 0 0 10px rgba(217,149,0,.28)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.slot.due{animation:glow 1.6s ease-in-out infinite}
+.slot.due .led{animation:blink .9s steps(1) infinite}
+
+.alarm{
+  margin:0 0 18px;padding:18px;border-radius:16px;background:var(--due);color:#1A1300;
+  display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-weight:700;font-size:21px
+}
+.alarm .btn{background:#1A1300;color:#fff}
+.alarm .btn.ghost{background:transparent;color:#1A1300;border-color:#1A1300}
+
+/* sections */
+section{margin-top:48px}
+section>h2{font-size:26px;font-weight:700;margin-bottom:6px}
+section>.lead{color:var(--muted);margin:0 0 16px;font-size:16px;max-width:62ch}
+
+/* history grid */
+.scroll{overflow-x:auto;max-width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:16px}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:10px 8px;text-align:center;border-bottom:1px solid var(--line);font-weight:400}
+th{font-size:14px;color:var(--muted);white-space:nowrap}
+th.row,td.row{text-align:left;padding-left:16px;font-weight:700;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.dot{
+  display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;
+  font-weight:700;font-size:15px;color:#fff;background:var(--idle)
+}
+.dot.taken{background:var(--taken)} .dot.missed{background:var(--missed)} .dot.due{background:var(--due);color:#1A1300}
+:root[data-theme="dark"] .dot{color:#0D1A1D}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .dot{color:#0D1A1D}}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:15px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend .dot{width:20px;height:20px;font-size:12px}
+
+/* contacts */
+.rows{border-top:1.5px solid var(--line)}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 2px;border-bottom:1.5px solid var(--line)}
+.row .who{font-weight:700}
+.row .meta{color:var(--muted);font-size:16px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:3px 10px;border-radius:99px;background:var(--idle-bg);font-size:14px}
+.badge{padding:3px 10px;border-radius:99px;background:var(--due-bg);color:var(--ink);font-size:14px;font-weight:700;border:1.5px solid var(--due)}
+.empty{padding:18px 2px;color:var(--muted)}
+
+/* settings */
+details.settings{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:6px 18px}
+details.settings>summary{cursor:pointer;font-weight:700;font-size:20px;padding:14px 0;list-style:none}
+details.settings>summary::-webkit-details-marker{display:none}
+.form h3{font-size:19px;margin:22px 0 10px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:15px;color:var(--muted)}
+input[type=text],input[type=tel],input[type=time],input[type=number]{
+  background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;min-height:46px;width:100%
+}
+.edit-row{display:grid;grid-template-columns:130px 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+.edit-contact{border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;display:grid;gap:8px}
+.edit-contact .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.checks{display:flex;gap:14px;flex-wrap:wrap;font-size:16px}
+.checks label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.checks input{width:20px;height:20px}
+.savebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0 14px}
+@media(max-width:520px){.edit-row{grid-template-columns:110px 1fr}.edit-row .btn{grid-column:1/-1}.edit-contact .two{grid-template-columns:1fr}}
+
+#toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  background:var(--btn);color:var(--btn-ink);padding:12px 18px;border-radius:12px;font-size:16px;
+  max-width:90vw;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10
+}
+#toast.show{opacity:1}
+@media (prefers-reduced-motion: reduce){
+  .slot.due,.slot.due .led{animation:none}
+  #toast{transition:none}
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div>
+      <h1 id="patient">İlaç takip</h1>
+      <p class="sub" id="sub">Kutudan gelen bilgiler burada görünür.</p>
+    </div>
+    <div class="clock"><div class="t" id="clockT">--:--</div><div class="d" id="clockD"></div></div>
+  </header>
+
+  <div class="alarmbar" id="alarmbar"></div>
+  <div class="note" id="readonly" hidden>Bu sayfayı yalnızca görüntülüyorsun. İlaç işaretlemek için sayfa sahibinden katkıda bulunan yetkisi iste.</div>
+  <div class="note" id="nodb" hidden>Ortak veriye bağlanılamadı. Sayfayı claude.ai üzerinden giriş yaparak aç.</div>
+
+  <div class="headline" id="headline"></div>
+  <div id="alarmArea"></div>
+  <div class="box" id="box"></div>
+
+  <section>
+    <h2>Son 7 gün</h2>
+    <p class="lead">Her satır bir ilaç, her sütun bir gün.</p>
+    <div class="scroll"><table id="hist"></table></div>
+    <div class="legend">
+      <span><i class="dot taken">✓</i> Alındı</span>
+      <span><i class="dot missed">!</i> Alınmadı</span>
+      <span><i class="dot due">•</i> Zamanı geldi</span>
+      <span><i class="dot">–</i> Bekliyor</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bildirimler</h2>
+    <p class="lead">İlaç zamanı geldiğinde, alındığında veya alınmadığında bu sayfayı açık tutan herkesin cihazına bildirim gelir. Her cihazda üstteki "Alarmı etkinleştir" düğmesine bir kez basılmalı.</p>
+    <div class="rows" id="feed"></div>
+  </section>
+
+  <section id="settingsSection" hidden>
+    <details class="settings" id="settings">
+      <summary>Programı düzenle</summary>
+      <div class="form" id="form"></div>
+    </details>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------- helpers ---------- */
+  var $ = function(id){ return document.getElementById(id); };
+  function h(tag, attrs){
+    var e = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function(k){
+      var v = attrs[k];
+      if (v === false || v == null) return;
+      if (k === 'class') e.className = v;
+      else if (k.indexOf('on') === 0) e.addEventListener(k.slice(2), v);
+      else if (k === 'value') e.value = v;
+      else if (v === true) e.setAttribute(k, '');
+      else e.setAttribute(k, v);
+    });
+    for (var i = 2; i < arguments.length; i++) append(e, arguments[i]);
+    return e;
+  }
+  function append(e, kid){
+    if (kid == null || kid === false) return;
+    if (Array.isArray(kid)) { kid.forEach(function(k){ append(e, k); }); return; }
+    e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  function p2(n){ return String(n).padStart(2,'0'); }
+  function dateKey(d){ return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+  function hhmm(d){ return p2(d.getHours())+':'+p2(d.getMinutes()); }
+  function uid(){ return 'x'+Math.random().toString(36).slice(2,9); }
+  function toast(msg){
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+  }
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+  /* ---------- state ---------- */
+  var db = null, userNs = null, myId = null;
+  var canWrite = null, isAdmin = false;
+  var config = { patient:'', graceMin:30, doses:[], contacts:[] };
+  var logs = {};
+  var outbox = [];
+  var now = new Date();
+  var silenced = {};     // dose key -> true
+  var notified = {};     // dose key -> true
+  var queuedLocal = {};  // sms key -> true
+  var audioCtx = null, alarmReady = false;
+  var draft = null;
+  var renderToken = 0;
+
+  var EVENT_LABEL = { due:'Zamanı geldi', missed:'Alınmadı', taken:'Alındı' };
+
+  function normalize(d){
+    d = d || {};
+    var okTime = /^\d{2}:\d{2}$/;
+    return {
+      patient: String(d.patient || '').slice(0,60),
+      graceMin: Math.max(5, Math.min(240, Number(d.graceMin) || 30)),
+      doses: (Array.isArray(d.doses) ? d.doses : []).slice(0,12).map(function(x){
+        return { id:String(x.id||uid()).replace(/[^A-Za-z0-9_-]/g,''), time: okTime.test(x.time||'') ? x.time : '08:00',
+                 name:String(x.name||'İlaç').slice(0,60), note:String(x.note||'').slice(0,80) };
+      }).sort(function(a,b){ return a.time < b.time ? -1 : 1; }),
+      contacts: (Array.isArray(d.contacts) ? d.contacts : []).slice(0,10).map(function(c){
+        var ev = c.events || {};
+        return { id:String(c.id||uid()).replace(/[^A-Za-z0-9_-]/g,''), name:String(c.name||'').slice(0,60),
+                 phone:String(c.phone||'').slice(0,20),
+                 events:{ due:!!ev.due, missed:!!ev.missed, taken:!!ev.taken } };
+      })
+    };
+  }
+
+  function doseTimes(dose, base){
+    var parts = dose.time.split(':');
+    var start = new Date(base || now); start.setHours(+parts[0], +parts[1], 0, 0);
+    var end = new Date(start.getTime() + config.graceMin * 60000);
+    return { start:start, end:end };
+  }
+  function logKey(day, dose){ return day + '__' + dose.id; }
+
+  // state of a dose today: upcoming | due | missed | taken | late
+  function doseState(dose){
+    var t = doseTimes(dose);
+    var lg = logs[logKey(dateKey(now), dose)];
+    if (lg) return (lg.takenAt && new Date(lg.takenAt) > t.end) ? 'late' : 'taken';
+    if (now < t.start) return 'upcoming';
+    if (now < t.end) return 'due';
+    return 'missed';
+  }
+
+  /* ---------- sound + notifications ---------- */
+  function beep(){
+    if (!audioCtx) return;
+    try {
+      [0, .28, .56].forEach(function(off){
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'square'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime + off);
+        g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + off + .02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + off + .2);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(audioCtx.currentTime + off); o.stop(audioCtx.currentTime + off + .22);
+      });
+    } catch(e){}
+  }
+  function enableAlarm(){
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !audioCtx) audioCtx = new AC();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    } catch(e){}
+    if ('Notification' in window && Notification.permission === 'default') {
+      try { Notification.requestPermission(); } catch(e){}
+    }
+    alarmReady = true;
+    beep();
+    renderAlarmBar();
+  }
+  function notify(dose){
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try { new Notification('İlaç zamanı', { body: dose.time + ' ' + dose.name, tag: logKey(dateKey(now), dose) }); } catch(e){}
+  }
+
+  function renderAlarmBar(){
+    var bar = $('alarmbar'); bar.textContent = '';
+    bar.className = 'alarmbar' + (alarmReady ? ' on' : '');
+    if (alarmReady) {
+      var perm = ('Notification' in window) ? Notification.permission : 'denied';
+      bar.append(h('span', null, 'Alarm açık. Bu sayfa açıkken ilaç zamanı gelince ses çalar' + (perm === 'granted' ? ' ve bildirim gelir.' : '.')));
+    } else {
+      bar.append(h('span', null, 'Sesli alarm ve bildirim için bu cihazda etkinleştir.'),
+                 h('button', { class:'btn small', type:'button', onclick:enableAlarm }, 'Alarmı etkinleştir'));
+    }
+  }
+
+  /* ---------- bildirimler ---------- */
+  var TITLES = { due:'İlaç zamanı', missed:'İlaç alınmadı', taken:'İlaç alındı' };
+  function bodyText(ev, dose, takenAt){
+    var who = config.patient || 'Hasta';
+    if (ev === 'due') return who + ': ' + dose.time + ' ' + dose.name + ' ilacının zamanı geldi.';
+    if (ev === 'missed') return who + ': ' + dose.time + ' ' + dose.name + ' ilacı henüz alınmadı.';
+    return who + ': ' + dose.time + ' ' + dose.name + ' ilacı alındı (' + takenAt + ').';
+  }
+  // Olay bir kez kaydedilir; sayfayı açık tutan her cihaz kendi bildirimini gösterir
+  async function enqueueSms(ev, dose, takenAt){
+    if (!db || canWrite === false) return;
+    var id = dateKey(now) + '__' + dose.id + '__' + ev;
+    if (queuedLocal[id]) return;
+    queuedLocal[id] = true;
+    try {
+      var ref = db.doc('feed/' + id);
+      var snap = await ref.get();
+      if (!snap.exists) {
+        await ref.set({ event:ev, title:TITLES[ev], text:bodyText(ev, dose, takenAt), createdAt:new Date().toISOString() });
+      }
+    } catch(e){ delete queuedLocal[id]; }
+  }
+
+  /* ---------- actions ---------- */
+  async function markTaken(dose){
+    if (!db) return;
+    var t = new Date();
+    try {
+      await db.doc('logs/' + logKey(dateKey(t), dose)).set({
+        date: dateKey(t), doseId: dose.id, doseName: dose.name, time: dose.time,
+        takenAt: t.toISOString(), source: 'elle', by: myId
+      });
+      silenced[logKey(dateKey(t), dose)] = true;
+      toast(dose.time + ' ' + dose.name + ' alındı olarak işaretlendi.');
+      enqueueSms('taken', dose, hhmm(t));
+    } catch(e){ toast('Kaydedilemedi. Yetkin yetersiz olabilir veya bağlantı koptu.'); }
+  }
+  async function undoTaken(dose){
+    if (!db) return;
+    try {
+      await db.doc('logs/' + logKey(dateKey(now), dose)).delete();
+      toast('İşaret geri alındı.');
+    } catch(e){ toast('Geri alınamadı.'); }
+  }
+
+  /* ---------- render: today ---------- */
+  async function renderToday(){
+    var token = ++renderToken;
+    var day = dateKey(now);
+    $('clockT').textContent = hhmm(now);
+    $('clockD').textContent = now.toLocaleDateString('tr-TR', { weekday:'long', day:'numeric', month:'long' });
+    $('patient').textContent = config.patient ? config.patient + ' için ilaç takibi' : 'İlaç takip';
+
+    var doses = config.doses;
+    var states = doses.map(doseState);
+    var due = doses.filter(function(d,i){ return states[i] === 'due'; });
+    var done = states.filter(function(s){ return s === 'taken' || s === 'late'; }).length;
+
+    // who marked
+    var ids = [];
+    doses.forEach(function(d){ var l = logs[logKey(day,d)]; if (l && l.by && ids.indexOf(l.by) < 0) ids.push(l.by); });
+    var profiles = {};
+    if (userNs && ids.length) { try { profiles = await userNs.profiles(ids); } catch(e){} }
+    if (token !== renderToken) return;
+
+    // headline
+    var hl;
+    if (!doses.length) hl = 'Henüz ilaç programı girilmedi';
+    else if (due.length) hl = 'İlaç zamanı: ' + due.map(function(d){ return d.time + ' ' + d.name; }).join(', ');
+    else if (done === doses.length) hl = 'Bugünkü ilaçların hepsi alındı';
+    else {
+      var missed = doses.filter(function(d,i){ return states[i] === 'missed'; });
+      var next = doses.filter(function(d,i){ return states[i] === 'upcoming'; })[0];
+      if (missed.length) hl = missed.length + ' ilaç alınmadı' + (next ? ', sıradaki ' + next.time : '');
+      else hl = 'Sıradaki ilaç ' + next.time + ' ' + next.name;
+    }
+    $('headline').textContent = hl;
+
+    // alarm banner
+    var aa = $('alarmArea'); aa.textContent = '';
+    if (due.length) {
+      var anyLoud = due.some(function(d){ return !silenced[logKey(day,d)]; });
+      aa.append(h('div', { class:'alarm', role:'alert' },
+        h('span', null, 'Kutuda LED yanıyor ve alarm çalıyor olmalı.'),
+        h('span', { style:'display:flex;gap:8px;flex-wrap:wrap' },
+          canWrite === false ? null : h('button', { class:'btn', type:'button', onclick:function(){ due.forEach(markTaken); } }, 'Alındı işaretle'),
+          anyLoud ? h('button', { class:'btn ghost', type:'button', onclick:function(){
+            due.forEach(function(d){ silenced[logKey(day,d)] = true; }); renderToday();
+          } }, 'Sesi kapat') : null)));
+    }
+
+    // compartments
+    var box = $('box'); box.textContent = '';
+    if (!doses.length) {
+      box.append(h('p', { class:'empty' }, isAdmin ? 'Aşağıdaki düzenleme bölümünden ilk ilacı ekle.' : 'Sayfa sahibi ilaç programını girdiğinde burada görünecek.'));
+    }
+    doses.forEach(function(d, i){
+      var st = states[i];
+      var lg = logs[logKey(day, d)];
+      var cls = st === 'late' ? 'taken' : st;
+      var stateText = '';
+      var whoText = '';
+      if (lg) {
+        var ta = new Date(lg.takenAt);
+        stateText = (st === 'late' ? 'Geç alındı ' : 'Alındı ') + hhmm(ta);
+        var pname = (lg.by && profiles[lg.by] && profiles[lg.by].name) || '';
+        whoText = lg.source === 'kutu' ? 'Kutu kapağı açıldı' : (pname ? pname + ' işaretledi' : 'Elle işaretlendi');
+      } else if (st === 'due') stateText = 'Şimdi alınmalı';
+      else if (st === 'missed') stateText = 'Alınmadı';
+      else stateText = 'Bekliyor';
+
+      var acts = h('div', { class:'acts' });
+      if (!lg && canWrite !== false && (st === 'due' || st === 'missed')) {
+        acts.append(h('button', { class:'btn small', type:'button', onclick:function(){ markTaken(d); } }, 'Alındı işaretle'));
+      }
+      if (lg && canWrite !== false) {
+        acts.append(h('button', { class:'btn link', type:'button', onclick:function(){ undoTaken(d); } }, 'Geri al'));
+      }
+      box.append(h('article', { class:'slot ' + cls, 'aria-label': d.time + ' ' + d.name + ', ' + stateText },
+        h('span', { class:'led', 'aria-hidden':'true' }),
+        h('div', { class:'time' }, d.time),
+        h('div', { class:'name' }, d.name),
+        d.note ? h('div', { class:'med' }, d.note) : null,
+        h('div', { class:'state' }, stateText, whoText ? h('span', { class:'who' }, whoText) : null),
+        acts));
+    });
+
+    $('sub').textContent = doses.length ? 'Kutudan gelen bilgiler burada görünür.' : 'Program girildiğinde kutu durumu burada görünür.';
+    renderHistory();
+  }
+
+  /* ---------- render: history ---------- */
+  function renderHistory(){
+    var t = $('hist'); t.textContent = '';
+    if (!config.doses.length) { t.append(h('tbody', null, h('tr', null, h('td', { class:'empty' }, 'Kayıt yok.')))); return; }
+    var days = [];
+    for (var i = 6; i >= 0; i--) { var d = new Date(now); d.setDate(d.getDate() - i); days.push(d); }
+    var head = h('tr', null, h('th', { class:'row' }, 'İlaç'));
+    days.forEach(function(d){
+      head.append(h('th', null, d.toLocaleDateString('tr-TR', { weekday:'short' }) + ' ' + d.getDate()));
+    });
+    t.append(h('thead', null, head));
+    var body = h('tbody');
+    config.doses.forEach(function(dose){
+      var tr = h('tr', null, h('td', { class:'row' }, dose.time + ' ' + dose.name));
+      days.forEach(function(d, idx){
+        var key = dateKey(d);
+        var lg = logs[logKey(key, dose)];
+        var cls = '', glyph = '–', label = 'Bekliyor';
+        if (lg) { cls = 'taken'; glyph = '✓'; label = 'Alındı'; }
+        else if (idx < 6) { cls = 'missed'; glyph = '!'; label = 'Alınmadı'; }
+        else {
+          var s = doseState(dose);
+          if (s === 'missed') { cls = 'missed'; glyph = '!'; label = 'Alınmadı'; }
+          else if (s === 'due') { cls = 'due'; glyph = '•'; label = 'Zamanı geldi'; }
+        }
+        tr.append(h('td', null, h('i', { class:'dot ' + cls, title:label, 'aria-label':label }, glyph)));
+      });
+      body.append(tr);
+    });
+    t.append(body);
+  }
+
+  /* ---------- render: feed ---------- */
+  function renderFeed(){
+    var o = $('feed'); o.textContent = '';
+    if (!outbox.length) o.append(h('p', { class:'empty' }, 'Henüz bildirim yok.'));
+    outbox.forEach(function(m){
+      var when = new Date(m.createdAt);
+      o.append(h('div', { class:'row' },
+        h('div', null,
+          h('div', { class:'who' }, m.title || ''),
+          h('div', { class:'meta' }, m.text || ''),
+          h('div', { class:'meta' }, isNaN(when) ? '' : when.toLocaleString('tr-TR', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })))));
+    });
+  }
+
+  /* ---------- settings ---------- */
+  function renderSettings(){
+    var f = $('form'); f.textContent = '';
+    if (!draft) draft = clone(config);
+    f.append(
+      h('div', { class:'field' }, h('label', { for:'f-patient' }, 'Hasta adı'),
+        h('input', { id:'f-patient', type:'text', value:draft.patient, oninput:function(e){ draft.patient = e.target.value; } })),
+      h('div', { class:'field' }, h('label', { for:'f-grace' }, 'İlaç zamanından sonra kaç dakika beklensin? Süre dolunca "alınmadı" sayılır.'),
+        h('input', { id:'f-grace', type:'number', min:'5', max:'240', value:String(draft.graceMin), oninput:function(e){ draft.graceMin = +e.target.value; } })),
+      h('h3', null, 'İlaçlar'));
+    draft.doses.forEach(function(d, i){
+      f.append(h('div', { class:'edit-row' },
+        h('input', { type:'time', value:d.time, 'aria-label':'Saat', oninput:function(e){ d.time = e.target.value; } }),
+        h('input', { type:'text', value:d.name, placeholder:'İlaç adı', 'aria-label':'İlaç adı', oninput:function(e){ d.name = e.target.value; } }),
+        h('button', { class:'btn ghost small', type:'button', onclick:function(){ draft.doses.splice(i,1); renderSettings(); } }, 'Sil')));
+    });
+    f.append(h('button', { class:'btn ghost small', type:'button', onclick:function(){
+      draft.doses.push({ id:uid(), time:'12:00', name:'', note:'' }); renderSettings();
+    } }, 'İlaç ekle'));
+
+    f.append(h('div', { class:'savebar' },
+      h('button', { class:'btn', type:'button', onclick:saveConfig }, 'Değişiklikleri kaydet'),
+      h('button', { class:'btn ghost', type:'button', onclick:function(){ draft = null; renderSettings(); } }, 'Vazgeç')));
+  }
+  async function saveConfig(){
+    if (!db || !draft) return;
+    var clean = normalize(draft);
+    try {
+      await db.doc('config/main').set(clean);
+      draft = null;
+      toast('Kaydedildi.');
+    } catch(e){ toast('Kaydedilemedi. Düzenleme yetkin olmayabilir.'); }
+  }
+
+  /* ---------- tick: alarm + sms events ---------- */
+  function tick(){
+    now = new Date();
+    renderToday();
+    var day = dateKey(now);
+    var loud = false;
+    config.doses.forEach(function(d){
+      var st = doseState(d), key = logKey(day, d), t = doseTimes(d);
+      if (st === 'due') {
+        if (!silenced[key]) loud = true;
+        enqueueSms('due', d);
+      } else if (st === 'missed' && now < new Date(t.end.getTime() + 15*60000)) {
+        enqueueSms('missed', d);
+      }
+    });
+    document.title = loud ? 'İlaç zamanı! İlaç Takip' : 'İlaç Takip';
+    tick.loud = loud;
+  }
+  function loudBeep(){ if (tick.loud && alarmReady) beep(); }
+
+  /* ---------- init ---------- */
+  async function init(){
+    renderAlarmBar(); renderToday(); renderFeed();
+    setInterval(function(){ $('clockT').textContent = hhmm(new Date()); }, 1000);
+    setInterval(tick, 10000);
+    setInterval(loudBeep, 3500);
+
+    try {
+      if (window.claude && window.claude.use) {
+        db = await window.claude.use('db');
+        userNs = await window.claude.use('user');
+      }
+    } catch(e){}
+    if (!db) { $('nodb').hidden = false; return; }
+
+    if (userNs) {
+      try { myId = await userNs.id(); isAdmin = await userNs.canEdit(); canWrite = await userNs.can('data.write'); } catch(e){}
+    }
+    if (canWrite === false) $('readonly').hidden = false;
+    if (isAdmin) { $('settingsSection').hidden = false; }
+
+    db.doc('config/main').onSnapshot(function(s){
+      config = normalize(s.exists ? s.data() : {});
+      renderFeed(); tick();
+      if (isAdmin && !$('settings').open) { draft = null; renderSettings(); }
+    }, function(){ toast('Program okunamadı.'); });
+
+    var from = new Date(); from.setDate(from.getDate() - 7);
+    db.collection('logs').where('date', '>=', dateKey(from)).onSnapshot(function(s){
+      logs = {};
+      s.docs.forEach(function(d){ logs[d.id] = d.data(); });
+      tick();
+    }, function(){ toast('Kayıtlar okunamadı.'); });
+
+    var firstFeed = true;
+    db.collection('feed').orderBy('createdAt', 'desc').limit(12).onSnapshot(function(s){
+      outbox = s.docs.map(function(d){ return d.data(); });
+      renderFeed();
+      s.docChanges().forEach(function(ch){
+        if (ch.type !== 'added') return;
+        var m = ch.doc.data();
+        var fresh = (Date.now() - new Date(m.createdAt).getTime()) < 120000;
+        if (fresh && !notified[ch.doc.id] && alarmReady && 'Notification' in window && Notification.permission === 'granted') {
+          notified[ch.doc.id] = true;
+          try { new Notification(m.title || 'İlaç Takip', { body:m.text || '', tag:ch.doc.id }); } catch(e){}
+        }
+      });
+    }, function(){});
+  }
+  init();
+})();
+</script>
+</body>
+</html>
